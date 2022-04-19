@@ -26,7 +26,7 @@ static const char *colors[][3]      = {
 	[SchemeNorm] = { col_gray3, col_gray1, col_gray2 },
 	[SchemeSel]  = { col_gray4, col_cyan,  col_cyan  },
 	[SchemeStatus]  = { col_gray3, col_gray1,  "#000000"  }, // Statusbar right {text,background,not used but cannot be empty}
-	[SchemeTagsSel]  = { col_gray4, col_cyan,  "#000000"  }, // Tagbar left selected {text,background,not used but cannot be empty}
+	[SchemeTagsSel]  = { col_gray4, col_gray1,  "#000000"  }, // Tagbar left selected {text,background,not used but cannot be empty}
 	[SchemeTagsNorm]  = { col_gray3, col_gray1,  "#000000"  }, // Tagbar left unselected {text,background,not used but cannot be empty}
 	[SchemeInfoSel]  = { col_gray4, col_gray1,  "#000000"  }, // infobar middle  selected {text,background,not used but cannot be empty}
 	[SchemeInfoNorm]  = { col_gray3, col_gray1,  "#000000"  }, // infobar middle  unselected {text,background,not used but cannot be empty}
@@ -39,6 +39,11 @@ static const unsigned int alphas[][3]      = {
 
 /* tagging */
 static const char *tags[] = { "1", "2", "3", "4" };
+
+static const unsigned int ulinepad     = 5;    /* horizontal padding between the underline and tag */
+static const unsigned int ulinestroke  = 2;    /* thickness / height of the underline */
+static const unsigned int ulinevoffset = 0;    /* how far above the bottom of the bar the line should appear */
+static const int ulineall              = 0;    /* 1 to show underline on all tags, 0 for just the active ones */
 
 static const Rule rules[] = {
 	/* xprop(1):
