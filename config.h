@@ -37,6 +37,17 @@ static const unsigned int alphas[][3]      = {
 	[SchemeSel]  = { OPAQUE, baralpha, borderalpha },
 };
 
+typedef struct {
+	const char *name;
+	const void *cmd;
+} Sp;
+
+const char *sptermcmd[] = {"st", "-n", "spterm", "-t", "Terminal", "-g", "100x14", NULL };
+static Sp scratchpads[] = {
+	/* name          cmd  */
+	{"spterm",  sptermcmd}
+};
+
 /* tagging */
 static const char *tags[] = { "1", "2", "3", "4" };
 
@@ -50,9 +61,9 @@ static const Rule rules[] = {
 	 *	WM_CLASS(STRING) = instance, class
 	 *	WM_NAME(STRING) = title
 	 */
-	/* class     instance  title           tags mask  isfloating  isterminal  noswallow  monitor */
-	{ "st",      NULL,     NULL,           0,         0,          1,           0,        -1 },
-	{ NULL,      NULL,     "Event Tester", 0,         0,          0,           1,        -1 }, /* xev */
+	/* class     instance     title            tags mask  isfloating  isterminal  noswallow  monitor */
+	{ "st",      NULL,        NULL,            0,         0,          1,           0,        -1 },
+	{ NULL,      "spterm",    NULL,            SPTAG(0),  1,          1,           0,        -1 }
 };
 
 /* layout(s) */
@@ -83,7 +94,7 @@ static const Layout layouts[] = {
 /* commands */
 static char runmon[2] = "0"; /* component of runcmd, manipulated in spawn() */
 static const char *runcmd[] = { "krun", "-m", runmon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
-static const char *termcmd[]  = { "st", NULL };
+static const char *termcmd[]  = { "st", "-t", "Terminal", NULL };
 static const char *browsercmd[]  = { "kffx", NULL };
 static const char *shutdowncmd[]  = { "shutdown", "now", NULL };
 static const char *restartcmd[]  = { "shutdown", "-r", "now", NULL };
@@ -92,6 +103,7 @@ static Key keys[] = {
 	{ MODKEY|ControlMask,           XK_comma,        spawn,          {.v = runcmd } },
 	{ MODKEY|ControlMask,           XK_h,            spawn,          {.v = termcmd } },
 	{ MODKEY|ControlMask,           XK_l,            spawn,          {.v = browsercmd } },
+	{ MODKEY|ControlMask,           XK_y,            togglescratch,  {.ui = 0 } },
 	{ MODKEY|ShiftMask,             XK_m,            togglefullscr,  {0} },
 	{ MODKEY|ShiftMask,             XK_n,            togglebar,      {0} },
 	{ MODKEY|ShiftMask,             XK_b,            togglefloating, {0} },
