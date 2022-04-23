@@ -1,5 +1,8 @@
 /* See LICENSE file for copyright and license details. */
 
+#define TERMCLASS "st"
+#define BROWSERCLASS "firefox"
+
 /* appearance */
 static const unsigned int borderpx  = 1;        /* border pixel of windows */
 static const unsigned int snap      = 32;       /* snap pixel */
@@ -11,10 +14,10 @@ static       int smartgaps          = 0;        /* 1 means no outer gap when the
 static const int swallowfloating    = 0;        /* 1 means swallow floating windows by default */
 static const int showbar            = 1;        /* 0 means no bar */
 static const int topbar             = 1;        /* 0 means bottom bar */
-static const int user_bh            = 25;       /* 0 means that dwm will calculate bar height, >= 1 means dwm will user_bh as bar height */
+static const int user_bh            = 30;       /* 0 means that dwm will calculate bar height, >= 1 means dwm will user_bh as bar height */
 static const char *fonts[]          = {
-	"JetBrains Mono Bold:size=14:antialias=true:autohint=true",
-	"JoyPixels:size=14:antialias=true:autohint=true"
+	"JetBrains Mono Bold:size=15:antialias=true:autohint=true",
+	"Noto Color Emoji:size=15:antialias=true:autohint=true"
 };
 static const char dmenufont[]       = "monospace:size=14";
 static const char col_gray1[]       = "#222222";
@@ -52,7 +55,7 @@ static Sp scratchpads[] = {
 };
 
 /* tagging */
-static const char *tags[] = { "1", "2", "3", "4" };
+static const char *tags[] = { "💻", "📚", "📺", "🌐" };
 
 static const unsigned int ulinepad     = 5;    /* horizontal padding between the underline and tag */
 static const unsigned int ulinestroke  = 2;    /* thickness / height of the underline */
@@ -64,9 +67,10 @@ static const Rule rules[] = {
 	 *	WM_CLASS(STRING) = instance, class
 	 *	WM_NAME(STRING) = title
 	 */
-	/* class     instance     title            tags mask  isfloating  isterminal  noswallow  monitor */
-	{ "st",      NULL,        NULL,            0,         0,          1,           0,        -1 },
-	{ NULL,      "spterm",    NULL,            SPTAG(0),  1,          1,           0,        -1 }
+	/* class         instance   title  tags mask  isfloating  isterminal  noswallow  monitor */
+	{ TERMCLASS,     NULL,      NULL,  0,         0,          1,           0,        -1 },
+	{ BROWSERCLASS,  NULL,      NULL,  1 << 3,    0,          0,           0,        -1 },
+	{ TERMCLASS,     "spterm",  NULL,  SPTAG(0),  1,          1,           0,        -1 }
 };
 
 /* layout(s) */
@@ -129,14 +133,13 @@ static Key keys[] = {
 	{ MODKEY|ShiftMask|ControlMask, XK_m,            setlayout,      {.v = &layouts[0]} },
 	{ MODKEY|ShiftMask|ControlMask, XK_n,            setlayout,      {.v = &layouts[1]} },
 	{ MODKEY|ShiftMask|ControlMask, XK_b,            setlayout,      {.v = &layouts[2]} },
-	{ MODKEY,                       XK_Tab,          view,           {0} },
 	{ MODKEY,                       XK_6,            view,           {.ui = ~0 } },
 	{ MODKEY|ShiftMask,             XK_6,            tag,            {.ui = ~0 } },
 	{ MODKEY,                       XK_comma,        focusmon,       {.i = -1 } },
 	{ MODKEY,                       XK_period,       focusmon,       {.i = +1 } },
 	{ MODKEY|ShiftMask,             XK_comma,        tagmon,         {.i = -1 } },
 	{ MODKEY|ShiftMask,             XK_period,       tagmon,         {.i = +1 } },
-	{ MODKEY|ShiftMask,             XK_q,            quit,           {0} },
+	{ MODKEY|ShiftMask,             XK_bracketright, quit,           {0} },
 	{ MODKEY|ShiftMask|ControlMask, XK_bracketleft,  spawn,          {.v = shutdowncmd } },
 	{ MODKEY|ShiftMask|ControlMask, XK_bracketright, spawn,          {.v = restartcmd } },
 	TAGKEYS(                        XK_7,                      0)
