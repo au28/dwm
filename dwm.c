@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/poll.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <X11/cursorfont.h>
@@ -161,6 +162,12 @@ typedef struct {
 	int monitor;
 } Rule;
 
+typedef struct {
+	const char *command;
+	const unsigned int interval;
+	const unsigned int signal;
+} Block;
+
 /* function declarations */
 static void applyrules(Client *c);
 static int applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
@@ -193,6 +200,11 @@ static void focusstack(const Arg *arg);
 static Atom getatomprop(Client *c, Atom prop);
 static int getrootptr(int *x, int *y);
 static long getstate(Window w);
+static void getcmd(int i);
+static void getcmds(int time);
+static void getsigcmds(unsigned int signal);
+static int gcd(int a, int b);
+static int getstatus(int width);
 static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
 static void grabbuttons(Client *c, int focused);
 static void grabkeys(void);
@@ -241,6 +253,7 @@ static void unmanage(Client *c, int destroyed);
 static void unmapnotify(XEvent *e);
 static void updatebarpos(Monitor *m);
 static void updatebars(void);
+//static void updateblock(const Arg *arg);
 static void updateclientlist(void);
 static int updategeom(void);
 static void updatenumlockmask(void);
@@ -266,7 +279,8 @@ static pid_t winpid(Window w);
 
 /* variables */
 static const char broken[] = "broken";
-static char stext[256];
+static unsigned int sleepinterval = 0, maxinterval = 0, timeinterval = 0;
+static unsigned int stsw = 0;
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
 static int bh, blw = 0;      /* bar geometry */
@@ -289,7 +303,7 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 	[PropertyNotify] = propertynotify,
 	[UnmapNotify] = unmapnotify
 };
-static Atom wmatom[WMLast], netatom[NetLast];
+static Atom wmatom[WMLast], netatom[NetLast], dwmstatus;
 static int running = 1;
 static Cur *cursor[CurLast];
 static Clr **scheme;
@@ -307,6 +321,11 @@ static xcb_connection_t *xcon;
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
+
+static char blockoutput[LENGTH(blocks)][CMDLENGTH] = {0};
+static int pipes[LENGTH(blocks)][2];
+static int execlock = 0; /* ensure only one child process exists per block at an instance */
+static int isalarm = 0;
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
 struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
@@ -555,7 +574,7 @@ buttonpress(XEvent *e)
 			arg.ui = 1 << i;
 		} else if (ev->x < x + blw)
 			click = ClkLtSymbol;
-		else if (ev->x > selmon->ww - (int)TEXTW(stext))
+		else if (ev->x > (x = selmon->ww - stsw))
 			click = ClkStatusText;
 		else
 			click = ClkWinTitle;
@@ -829,11 +848,8 @@ drawbar(Monitor *m)
 		return;
 
 	/* draw status first so it can be overdrawn by tags later */
-	if (m == selmon) { /* status is only drawn on selected monitor */
-		drw_setscheme(drw, scheme[SchemeStatus]);
-		tw = TEXTW(stext) - lrpad + 2; /* 2px right padding */
-		drw_text(drw, m->ww - tw, 0, tw, bh, 0, stext, 0);
-	}
+	if (m == selmon) /* status is only drawn on selected monitor */
+		tw = getstatus(m->ww);
 
 	for (c = m->clients; c; c = c->next) {
 		occ |= c->tags;
@@ -1029,6 +1045,102 @@ getstate(Window w)
 		result = *p;
 	XFree(p);
 	return result;
+}
+
+static void
+remove_all(char *str, char to_remove)
+{
+	char *read = str, *write = str;
+	do {
+		while (*read == to_remove) read++;
+		*write++ = *read;
+		read++;
+	} while (*(read-1));
+}
+
+void
+getcmd(int i)
+{
+    if (!selmon->showbar)
+        return;
+
+    if (execlock & 1 << i) { /* block is already running */
+        fprintf(stderr, "dwm: ignoring block %d, command %s\n", i, blocks[i].command);
+        return;
+    }
+
+    /* lock execution of block until current instance finishes execution */
+    execlock |= 1 << i;
+
+    if (fork() == 0) {
+        if (dpy)
+            close(ConnectionNumber(dpy));
+        dup2(pipes[i][1], STDOUT_FILENO);
+        close(pipes[i][0]);
+        close(pipes[i][1]);
+
+        execlp("/bin/sh", "sh", "-c", blocks[i].command, (char *) NULL);
+        fprintf(stderr, "dwm: block %d, execlp %s", i, blocks[i].command);
+        perror(" failed");
+        exit(EXIT_SUCCESS);
+    }
+}
+
+void
+getcmds(int time)
+{
+    int i;
+    for (i = 0; i < LENGTH(blocks); i++)
+        if ((blocks[i].interval != 0 && time % blocks[i].interval == 0) || time == -1)
+            getcmd(i);
+}
+
+void
+getsigcmds(unsigned int signal)
+{
+	int i;
+	for (i = 0; i < LENGTH(blocks); i++)
+	{
+		if (blocks[i].signal == signal)
+			getcmd(i);
+	}
+}
+
+int
+getstatus(int width)
+{
+	int i, len, all = width, delimlen = TEXTW(delimiter) - lrpad;
+
+	drw_setscheme(drw, scheme[SchemeNorm]); /* 're-set' the scheme */
+	for (i = LENGTH(blocks) - 1; i >= 0; i--)
+	{
+		if (*blockoutput[i] == '\0') /* ignore command that output NULL or '\0' */
+			continue;
+		len = TEXTW(blockoutput[i]) - lrpad;
+		all -= len;
+		drw_text(drw, all, 0, len, bh, 0, blockoutput[i], 0);
+		/* draw delimiter */
+		if (delimiter == '\0') /* ignore no delimiter */
+			continue;
+		all -= delimlen;
+		drw_text(drw, all, 0, delimlen, bh, 0, delimiter, 0);
+	}
+
+	return stsw = width - all;
+}
+
+int
+gcd(int a, int b)
+{
+    int temp;
+
+    while (b > 0) {
+        temp = a % b;
+        a = b;
+        b = temp;
+    }
+
+    return a;
 }
 
 int
@@ -1353,7 +1465,7 @@ propertynotify(XEvent *e)
 	Window trans;
 	XPropertyEvent *ev = &e->xproperty;
 
-	if ((ev->window == root) && (ev->atom == XA_WM_NAME))
+	if ((ev->window == root) && ((ev->atom == XA_WM_NAME) || (ev->atom == dwmstatus)))
 		updatestatus();
 	else if (ev->state == PropertyDelete)
 		return; /* ignore */
@@ -1510,12 +1622,91 @@ restack(Monitor *m)
 void
 run(void)
 {
-	XEvent ev;
+    int i;
+    XEvent ev;
+    struct pollfd fds[LENGTH(blocks) + 1 ] = {0};
+
+    fds[0].fd = ConnectionNumber(dpy);
+    fds[0].events = POLLIN;
+
+    for (i = 0; i < LENGTH(blocks); i++) {
+        pipe(pipes[i]);
+        fds[i +1].fd = pipes[i][0];
+        fds[i +1].events = POLLIN;
+        getcmd(i);
+        if (blocks[i].interval) {
+            sleepinterval = gcd(blocks[i].interval, sleepinterval);
+            maxinterval = MAX(blocks[i].interval, maxinterval);
+        }
+    }
+
+    alarm(sleepinterval);
 	/* main event loop */
 	XSync(dpy, False);
-	while (running && !XNextEvent(dpy, &ev))
-		if (handler[ev.type])
-			handler[ev.type](&ev); /* call handler */
+    while (running) {
+        /* bar hidden, then skip poll */
+        if (!selmon->showbar) {
+            XNextEvent(dpy, &ev);
+            if (handler[ev.type])
+                handler[ev.type](&ev); /* call handler */
+            continue;
+        }
+
+        if ((poll(fds, LENGTH(blocks) + 1, -1)) == -1) {
+            if (errno == EINTR) { /* signal caught */
+                if (isalarm) /* SIGALRM */
+                    isalarm = 0;
+                else
+                    fprintf(stderr, "dwm: poll INTERRUPTED by a signal (EINTR)\n");
+                continue;
+            }
+            fprintf(stderr, "dwm: poll ");
+            perror("failed");
+            exit(EXIT_FAILURE);
+        }
+
+        /* handle display fd */
+        if (fds[0].revents & POLLIN) {
+            while (running && XPending(dpy)) {
+                XNextEvent(dpy, &ev);
+                if (handler[ev.type])
+                    handler[ev.type](&ev); /* call handler */
+            }
+        } else if (fds[0].revents & POLLHUP) {
+            fprintf(stderr, "dwm: main event loop, hang up\n");
+            perror(" failed");
+            exit(1);
+        }
+
+        /* handle blocks */
+        for (i = 0; i < LENGTH(blocks); i++) {
+            if (fds[i + 1].revents & POLLIN) {
+                /* empty buffer with CMDLEN + 1 byte for the null terminator */
+                int bt = read(fds[i + 1].fd, blockoutput[i], CMDLENGTH);
+                /* remove lock for the current block */
+                execlock &= ~(1 << i);
+                if (bt == -1) { /* if read failed */
+                    fprintf(stderr, "dwm: read failed in block %s\n", blocks[i].command);
+                    perror(" failed");
+                    continue;
+                }
+
+                blockoutput[i][bt++] = '\0';
+                remove_all(blockoutput[i], '\n');
+                drawbar(selmon);
+            } else if (fds[i + 1].revents & POLLHUP) {
+                fprintf(stderr, "dwm: blocks hangup\n");
+                perror(" failed");
+                exit(1);
+            }
+        }
+    }
+
+    /* close the pipes after running */
+    for (i = 0; i < LENGTH(blocks); i++) {
+        close(pipes[i][0]);
+        close(pipes[i][1]);
+    }
 }
 
 void
@@ -1665,74 +1856,100 @@ setmfact(const Arg *arg)
 }
 
 void
+dummysighandler(int unused)
+{
+	return;
+}
+
+void
+sigalrm()
+{
+    isalarm = 1;
+    getcmds(timeinterval);
+    alarm(sleepinterval);
+    timeinterval = (timeinterval + sleepinterval - 1) % maxinterval + 1;
+}
+
+void
 setup(void)
 {
-	int i;
-	XSetWindowAttributes wa;
-	Atom utf8string;
+    XSetWindowAttributes wa;
+    Atom utf8string;
+    int i;
 
-	/* clean up any zombies immediately */
-	sigchld(0);
+    /* clean up any zombies immediately */
+    sigchld(0);
 
-	/* init screen */
-	screen = DefaultScreen(dpy);
-	sw = DisplayWidth(dpy, screen);
-	sh = DisplayHeight(dpy, screen);
-	root = RootWindow(dpy, screen);
-	xinitvisual();
-	drw = drw_create(dpy, screen, root, sw, sh, visual, depth, cmap);
-	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
-		die("no fonts could be loaded.");
-	lrpad = drw->fonts->h;
-	bh = user_bh ? user_bh : drw->fonts->h + 2;
-	updategeom();
-	/* init atoms */
-	utf8string = XInternAtom(dpy, "UTF8_STRING", False);
-	wmatom[WMProtocols] = XInternAtom(dpy, "WM_PROTOCOLS", False);
-	wmatom[WMDelete] = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
-	wmatom[WMState] = XInternAtom(dpy, "WM_STATE", False);
-	wmatom[WMTakeFocus] = XInternAtom(dpy, "WM_TAKE_FOCUS", False);
-	netatom[NetActiveWindow] = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
-	netatom[NetSupported] = XInternAtom(dpy, "_NET_SUPPORTED", False);
-	netatom[NetWMName] = XInternAtom(dpy, "_NET_WM_NAME", False);
-	netatom[NetWMState] = XInternAtom(dpy, "_NET_WM_STATE", False);
-	netatom[NetWMCheck] = XInternAtom(dpy, "_NET_SUPPORTING_WM_CHECK", False);
-	netatom[NetWMFullscreen] = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False);
-	netatom[NetWMWindowType] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
-	netatom[NetWMWindowTypeDialog] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
-	netatom[NetClientList] = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
-	/* init cursors */
-	cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
-	cursor[CurResize] = drw_cur_create(drw, XC_sizing);
-	cursor[CurMove] = drw_cur_create(drw, XC_fleur);
-	/* init appearance */
-	scheme = ecalloc(LENGTH(colors), sizeof(Clr *));
-	for (i = 0; i < LENGTH(colors); i++)
-		scheme[i] = drw_scm_create(drw, colors[i], alphas[i], 3);
-	/* init bars */
-	updatebars();
-	updatestatus();
-	/* supporting window for NetWMCheck */
-	wmcheckwin = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
-	XChangeProperty(dpy, wmcheckwin, netatom[NetWMCheck], XA_WINDOW, 32,
-		PropModeReplace, (unsigned char *) &wmcheckwin, 1);
-	XChangeProperty(dpy, wmcheckwin, netatom[NetWMName], utf8string, 8,
-		PropModeReplace, (unsigned char *) "dwm", 3);
-	XChangeProperty(dpy, root, netatom[NetWMCheck], XA_WINDOW, 32,
-		PropModeReplace, (unsigned char *) &wmcheckwin, 1);
-	/* EWMH support per view */
-	XChangeProperty(dpy, root, netatom[NetSupported], XA_ATOM, 32,
-		PropModeReplace, (unsigned char *) netatom, NetLast);
-	XDeleteProperty(dpy, root, netatom[NetClientList]);
-	/* select events */
-	wa.cursor = cursor[CurNormal]->cursor;
-	wa.event_mask = SubstructureRedirectMask|SubstructureNotifyMask
-		|ButtonPressMask|PointerMotionMask|EnterWindowMask
-		|LeaveWindowMask|StructureNotifyMask|PropertyChangeMask;
-	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
-	XSelectInput(dpy, root, wa.event_mask);
-	grabkeys();
-	focus(NULL);
+    /* ignore all real time signals */
+    for (i = SIGRTMIN; i <= SIGRTMAX; i++)
+        signal(i, dummysighandler);
+
+    struct sigaction al;
+    al.sa_handler = sigalrm;
+    al.sa_flags = SA_RESTART;
+    sigemptyset(&al.sa_mask);
+    sigaction(SIGALRM, &al, NULL);
+
+    /* init screen */
+    screen = DefaultScreen(dpy);
+    sw = DisplayWidth(dpy, screen);
+    sh = DisplayHeight(dpy, screen);
+    root = RootWindow(dpy, screen);
+    xinitvisual();
+    drw = drw_create(dpy, screen, root, sw, sh, visual, depth, cmap);
+    if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
+        die("no fonts could be loaded.");
+    lrpad = drw->fonts->h;
+    bh = user_bh ? user_bh : drw->fonts->h + 2;
+    updategeom();
+    /* init atoms */
+    dwmstatus = XInternAtom(dpy, "UPDATE_DWM_STATUSBAR", False);
+    utf8string = XInternAtom(dpy, "UTF8_STRING", False);
+    wmatom[WMProtocols] = XInternAtom(dpy, "WM_PROTOCOLS", False);
+    wmatom[WMDelete] = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
+    wmatom[WMState] = XInternAtom(dpy, "WM_STATE", False);
+    wmatom[WMTakeFocus] = XInternAtom(dpy, "WM_TAKE_FOCUS", False);
+    netatom[NetActiveWindow] = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
+    netatom[NetSupported] = XInternAtom(dpy, "_NET_SUPPORTED", False);
+    netatom[NetWMName] = XInternAtom(dpy, "_NET_WM_NAME", False);
+    netatom[NetWMState] = XInternAtom(dpy, "_NET_WM_STATE", False);
+    netatom[NetWMCheck] = XInternAtom(dpy, "_NET_SUPPORTING_WM_CHECK", False);
+    netatom[NetWMFullscreen] = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False);
+    netatom[NetWMWindowType] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
+    netatom[NetWMWindowTypeDialog] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
+    netatom[NetClientList] = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+    /* init cursors */
+    cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
+    cursor[CurResize] = drw_cur_create(drw, XC_sizing);
+    cursor[CurMove] = drw_cur_create(drw, XC_fleur);
+    /* init appearance */
+    scheme = ecalloc(LENGTH(colors), sizeof(Clr *));
+    for (i = 0; i < LENGTH(colors); i++)
+        scheme[i] = drw_scm_create(drw, colors[i], alphas[i], 3);
+    /* init bars */
+    updatebars();
+    updatestatus();
+    /* supporting window for NetWMCheck */
+    wmcheckwin = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
+    XChangeProperty(dpy, wmcheckwin, netatom[NetWMCheck], XA_WINDOW, 32,
+        PropModeReplace, (unsigned char *) &wmcheckwin, 1);
+    XChangeProperty(dpy, wmcheckwin, netatom[NetWMName], utf8string, 8,
+        PropModeReplace, (unsigned char *) "dwm", 3);
+    XChangeProperty(dpy, root, netatom[NetWMCheck], XA_WINDOW, 32,
+        PropModeReplace, (unsigned char *) &wmcheckwin, 1);
+    /* EWMH support per view */
+    XChangeProperty(dpy, root, netatom[NetSupported], XA_ATOM, 32,
+        PropModeReplace, (unsigned char *) netatom, NetLast);
+    XDeleteProperty(dpy, root, netatom[NetClientList]);
+    /* select events */
+    wa.cursor = cursor[CurNormal]->cursor;
+    wa.event_mask = SubstructureRedirectMask|SubstructureNotifyMask
+        |ButtonPressMask|PointerMotionMask|EnterWindowMask
+        |LeaveWindowMask|StructureNotifyMask|PropertyChangeMask;
+    XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
+    XSelectInput(dpy, root, wa.event_mask);
+    grabkeys();
+    focus(NULL);
 }
 
 
@@ -1816,10 +2033,11 @@ tagmon(const Arg *arg)
 void
 togglebar(const Arg *arg)
 {
-	selmon->showbar = !selmon->showbar;
-	updatebarpos(selmon);
-	XMoveResizeWindow(dpy, selmon->barwin, selmon->wx, selmon->by, selmon->ww, bh);
-	arrange(selmon);
+    selmon->showbar = !selmon->showbar;
+    updatebarpos(selmon);
+    XMoveResizeWindow(dpy, selmon->barwin, selmon->wx, selmon->by, selmon->ww, bh);
+    arrange(selmon);
+    getcmds(-1);
 }
 
 void
@@ -2003,6 +2221,13 @@ updatebarpos(Monitor *m)
 }
 
 void
+updateblock(const Arg *arg)
+{
+	getsigcmds(arg->ui);
+	updatestatus();
+}
+
+void
 updateclientlist()
 {
 	Client *c;
@@ -2156,8 +2381,6 @@ updatesizehints(Client *c)
 void
 updatestatus(void)
 {
-	if (!gettextprop(root, XA_WM_NAME, stext, sizeof(stext)))
-		strcpy(stext, "dwm-"VERSION);
 	drawbar(selmon);
 }
 

@@ -54,6 +54,18 @@ static Sp scratchpads[] = {
 	{"spterm",  sptermcmd}
 };
 
+/* status bar */
+static const Block blocks[] = {
+	/* command   interval  signal */
+	{ "kstt b",  5,        1},
+	{ "kstt t",  60,       2}
+};
+
+/* delimeter between blocks commands. NULL character ('\0') means no delimeter. */
+static char delimiter[] = "  ";
+/* max number of character that one block command can output */
+#define CMDLENGTH 50
+
 /* tagging */
 static const char *tags[] = { "💻", "📚", "📺", "🌐" };
 
