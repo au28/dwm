@@ -62,7 +62,7 @@ static const Block blocks[] = {
 };
 
 /* delimeter between blocks commands. NULL character ('\0') means no delimeter. */
-static char delimiter[] = "  ";
+static char delimiter[] = "\0";
 /* max number of character that one block command can output */
 #define CMDLENGTH 50
 
@@ -98,12 +98,12 @@ static const Layout layouts[] = {
 	{ "|M|",      centeredmaster },
 	{ "[M]",      centeredfloatingmaster },
 	{ "[F]",      NULL },
-	{ "[T]",      tile },
-	{ "[M]",      monocle }
+	{ "[T]",      tile }
 };
 
 /* key definitions */
 #define MODKEY Mod1Mask
+#define ALTMOD Mod4Mask
 #define TAGKEYS(KEY,TAG) \
 	{ MODKEY,                       KEY,      view,           {.ui = 1 << TAG} }, \
 	{ MODKEY|ControlMask,           KEY,      toggleview,     {.ui = 1 << TAG} }, \
@@ -147,10 +147,7 @@ static Key keys[] = {
 	{ MODKEY|ShiftMask|ControlMask, XK_b,            setlayout,      {.v = &layouts[2]} },
 	{ MODKEY,                       XK_6,            view,           {.ui = ~0 } },
 	{ MODKEY|ShiftMask,             XK_6,            tag,            {.ui = ~0 } },
-	{ MODKEY,                       XK_comma,        focusmon,       {.i = -1 } },
-	{ MODKEY,                       XK_period,       focusmon,       {.i = +1 } },
-	{ MODKEY|ShiftMask,             XK_comma,        tagmon,         {.i = -1 } },
-	{ MODKEY|ShiftMask,             XK_period,       tagmon,         {.i = +1 } },
+	{ ALTMOD,                       XK_m,            focusmon,       {.i = +1 } },
 	{ MODKEY|ShiftMask,             XK_bracketright, quit,           {0} },
 	{ MODKEY|ShiftMask|ControlMask, XK_bracketleft,  spawn,          {.v = shutdowncmd } },
 	{ MODKEY|ShiftMask|ControlMask, XK_bracketright, spawn,          {.v = restartcmd } },
