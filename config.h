@@ -1,7 +1,6 @@
 /* See LICENSE file for copyright and license details. */
 
 #define TERMCLASS "st"
-#define BROWSERCLASS "firefox"
 
 /* appearance */
 static const unsigned int borderpx  = 1;        /* border pixel of windows */
@@ -14,10 +13,10 @@ static       int smartgaps          = 0;        /* 1 means no outer gap when the
 static const int swallowfloating    = 0;        /* 1 means swallow floating windows by default */
 static const int showbar            = 1;        /* 0 means no bar */
 static const int topbar             = 1;        /* 0 means bottom bar */
-static const int user_bh            = 30;       /* 0 means that dwm will calculate bar height, >= 1 means dwm will user_bh as bar height */
+static const int user_bh            = 25;       /* 0 means that dwm will calculate bar height, >= 1 means dwm will user_bh as bar height */
 static const char *fonts[]          = {
-	"JetBrains Mono Bold:size=15:antialias=true:autohint=true",
-	"Noto Color Emoji:size=15:antialias=true:autohint=true"
+	"JetBrains Mono Bold:size=16:antialias=true:autohint=true",
+	"Noto Color Emoji:size=13:antialias=true:autohint=true"
 };
 static const char dmenufont[]       = "monospace:size=14";
 static const char col_gray1[]       = "#222222";
@@ -62,12 +61,12 @@ static const Block blocks[] = {
 };
 
 /* delimeter between blocks commands. NULL character ('\0') means no delimeter. */
-static char delimiter[] = "\0";
+static char delimiter[] = "";
 /* max number of character that one block command can output */
 #define CMDLENGTH 50
 
 /* tagging */
-static const char *tags[] = { "💻", "📚", "📺", "🌐" };
+static const char *tags[] = { "🔴", "🟢", "🔵", "⚪" };
 
 static const unsigned int ulinepad     = 5;    /* horizontal padding between the underline and tag */
 static const unsigned int ulinestroke  = 2;    /* thickness / height of the underline */
@@ -81,7 +80,6 @@ static const Rule rules[] = {
 	 */
 	/* class         instance   title  tags mask  isfloating  isterminal  noswallow  monitor */
 	{ TERMCLASS,     NULL,      NULL,  0,         0,          1,           0,        -1 },
-	{ BROWSERCLASS,  NULL,      NULL,  1 << 3,    0,          0,           0,        -1 },
 	{ TERMCLASS,     "spterm",  NULL,  SPTAG(0),  1,          1,           0,        -1 }
 };
 
@@ -95,10 +93,9 @@ static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen win
 
 static const Layout layouts[] = {
 	/* symbol     arrange function */
-	{ "|M|",      centeredmaster },
-	{ "[M]",      centeredfloatingmaster },
-	{ "[F]",      NULL },
-	{ "[T]",      tile }
+	{ "🔳",      centeredmaster },
+	{ "🔲",      centeredfloatingmaster },
+	{ "⬜",      NULL }
 };
 
 /* key definitions */
@@ -115,6 +112,7 @@ static char runmon[2] = "0"; /* component of runcmd, manipulated in spawn() */
 static const char *runcmd[] = { "krun", "-m", runmon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
 static const char *termcmd[]  = { "st", "-t", "Terminal", NULL };
 static const char *browsercmd[]  = { "kffx", NULL };
+static const char *monitorcmd[]  = { "kmon", NULL };
 static const char *shutdowncmd[]  = { "shutdown", "now", NULL };
 static const char *restartcmd[]  = { "shutdown", "-r", "now", NULL };
 
@@ -148,6 +146,7 @@ static Key keys[] = {
 	{ MODKEY,                       XK_6,            view,           {.ui = ~0 } },
 	{ MODKEY|ShiftMask,             XK_6,            tag,            {.ui = ~0 } },
 	{ ALTMOD,                       XK_m,            focusmon,       {.i = +1 } },
+	{ ALTMOD|ShiftMask,             XK_m,            spawn,          {.v = monitorcmd } },
 	{ MODKEY|ShiftMask,             XK_bracketright, quit,           {0} },
 	{ MODKEY|ShiftMask|ControlMask, XK_bracketleft,  spawn,          {.v = shutdowncmd } },
 	{ MODKEY|ShiftMask|ControlMask, XK_bracketright, spawn,          {.v = restartcmd } },
