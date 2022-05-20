@@ -835,14 +835,24 @@ createmon(void)
 	m = ecalloc(1, sizeof(Monitor));
 	m->cl = cl;
 	m->tagset[0] = m->tagset[1] = (1<<i) & (~SPTAGMASK);
-	m->mfact = mfact;
-	m->nmaster = nmaster;
 	m->showbar = showbar;
 	m->topbar = topbar;
-	m->gappih = gappih;
-	m->gappiv = gappiv;
-	m->gappoh = gappoh;
-	m->gappov = gappov;
+	if (selmon) {
+		m->mfact = selmon->mfact;
+		m->nmaster = selmon->nmaster;
+		m->gappih = selmon->gappih;
+		m->gappiv = selmon->gappiv;
+		m->gappoh = selmon->gappoh;
+		m->gappov = selmon->gappov;
+	}
+	else {
+		m->mfact = mfact;
+		m->nmaster = nmaster;
+		m->gappih = gappih;
+		m->gappiv = gappiv;
+		m->gappoh = gappoh;
+		m->gappov = gappov;
+	}
 	m->lt[0] = &layouts[0];
 	m->lt[1] = &layouts[1 % LENGTH(layouts)];
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
@@ -1279,8 +1289,12 @@ grabkeys(void)
 void
 incnmaster(const Arg *arg)
 {
-	selmon->nmaster = MAX(selmon->nmaster + arg->i, 0);
-	arrange(selmon);
+    Monitor *m;
+    int i = (arg->i != 0) ? selmon->nmaster + arg->i : nmaster;
+    for (m = mons; m; m = m->next) {
+        m->nmaster = MAX(i, 0);
+        arrange(m);
+    }
 }
 
 #ifdef XINERAMA
@@ -1881,30 +1895,34 @@ setfullscreen(Client *c, int fullscreen)
 void
 setlayout(const Arg *arg)
 {
-	if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
-		selmon->sellt ^= 1;
-	if (arg && arg->v)
-		selmon->lt[selmon->sellt] = (Layout *)arg->v;
-	strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol);
-	if (selmon->sel)
-		arrange(selmon);
-	else
-		drawbar(selmon);
+    Monitor *m;
+    for (m = mons; m; m = m->next) {
+        if (!arg || !arg->v || arg->v != m->lt[m->sellt])
+            m->sellt ^= 1;
+        if (arg && arg->v)
+            m->lt[m->sellt] = (Layout *)arg->v;
+        strncpy(m->ltsymbol, m->lt[m->sellt]->symbol, sizeof m->ltsymbol);
+        arrange(m);
+    }
 }
 
-/* arg > 1.0 will set mfact absolutely */
+/* arg >= 1.0 will reset mfact */
 void
 setmfact(const Arg *arg)
 {
-	float f;
+    Monitor *m;
+    float f;
 
-	if (!arg || !selmon->lt[selmon->sellt]->arrange)
-		return;
-	f = arg->f < 1.0 ? arg->f + selmon->mfact : arg->f - 1.0;
-	if (f < 0.05 || f > 0.95)
-		return;
-	selmon->mfact = f;
-	arrange(selmon);
+    if (!arg || !selmon->lt[selmon->sellt]->arrange)
+        return;
+    f = arg->f < 1.0 ? selmon->mfact + arg->f : mfact;
+    if (f < 0.05 || f > 0.95)
+        return;
+
+    for (m = mons; m; m = m->next) {
+        m->mfact = f;
+        arrange(m);
+    }
 }
 
 void

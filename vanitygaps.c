@@ -13,33 +13,29 @@ static void getfacts(Monitor *m, int msize, int ssize, float *mf, float *sf, int
 static void setgaps(int oh, int ov, int ih, int iv);
 
 /* Settings */
-#if !PERTAG_PATCH
 static int enablegaps = 1;
-#endif // PERTAG_PATCH
 
 void
 setgaps(int oh, int ov, int ih, int iv)
 {
-	if (oh < 0) oh = 0;
-	if (ov < 0) ov = 0;
-	if (ih < 0) ih = 0;
-	if (iv < 0) iv = 0;
-
-	selmon->gappoh = oh;
-	selmon->gappov = ov;
-	selmon->gappih = ih;
-	selmon->gappiv = iv;
-	arrange(selmon);
+    Monitor *m;
+    for (m = mons; m; m = m->next) {
+        if (oh < 0) oh = 0;
+        if (ov < 0) ov = 0;
+        if (ih < 0) ih = 0;
+        if (iv < 0) iv = 0;
+        m->gappoh = oh;
+        m->gappov = ov;
+        m->gappih = ih;
+        m->gappiv = iv;
+        arrange(m);
+    }
 }
 
 void
 togglegaps(const Arg *arg)
 {
-	#if PERTAG_PATCH
-	selmon->pertag->enablegaps[selmon->pertag->curtag] = !selmon->pertag->enablegaps[selmon->pertag->curtag];
-	#else
 	enablegaps = !enablegaps;
-	#endif // PERTAG_PATCH
 	arrange(NULL);
 }
 
@@ -86,11 +82,7 @@ void
 getgaps(Monitor *m, int *oh, int *ov, int *ih, int *iv, unsigned int *nc)
 {
 	unsigned int n, oe, ie;
-	#if PERTAG_PATCH
-	oe = ie = selmon->pertag->enablegaps[selmon->pertag->curtag];
-	#else
 	oe = ie = enablegaps;
-	#endif // PERTAG_PATCH
 	Client *c;
 
 	for (n = 0, c = nexttiled(m->cl->clients, m); c; c = nexttiled(c->next, m), n++);
