@@ -135,10 +135,8 @@ struct Monitor {
 	int by;               /* bar geometry */
 	int mx, my, mw, mh;   /* screen size */
 	int wx, wy, ww, wh;   /* window area  */
-	int gappih;           /* horizontal gap between windows */
-	int gappiv;           /* vertical gap between windows */
-	int gappoh;           /* horizontal outer gaps */
-	int gappov;           /* vertical outer gaps */
+	int gappi;           /* gap between windows */
+	int gappo;           /* outer gaps */
 	unsigned int seltags;
 	unsigned int sellt;
 	unsigned int tagset[2];
@@ -818,18 +816,14 @@ createmon(void)
 	if (selmon) {
 		m->mfact = selmon->mfact;
 		m->nmaster = selmon->nmaster;
-		m->gappih = selmon->gappih;
-		m->gappiv = selmon->gappiv;
-		m->gappoh = selmon->gappoh;
-		m->gappov = selmon->gappov;
+		m->gappi = selmon->gappi;
+		m->gappo = selmon->gappo;
 	}
 	else {
 		m->mfact = mfact;
 		m->nmaster = nmaster;
-		m->gappih = gappih;
-		m->gappiv = gappiv;
-		m->gappoh = gappoh;
-		m->gappov = gappov;
+		m->gappi = gappi;
+		m->gappo = gappo;
 	}
 	m->lt[0] = &layouts[0];
 	m->lt[1] = &layouts[1 % LENGTH(layouts)];
@@ -1894,7 +1888,7 @@ setmfact(const Arg *arg)
     if (!arg || !selmon->lt[selmon->sellt]->arrange)
         return;
     f = arg->f < 1.0 ? selmon->mfact + arg->f : mfact;
-    if (f < 0.05 || f > 0.95)
+    if (f < 0.05 || f > 0.9)
         return;
 
     for (m = mons; m; m = m->next) {
