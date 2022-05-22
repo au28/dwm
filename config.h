@@ -112,7 +112,8 @@ static char runmon[2] = "0"; /* component of runcmd, manipulated in spawn() */
 static const char *runcmd[] = { "krun", "-m", runmon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
 static const char *termcmd[]  = { "st", "-t", "Terminal", NULL };
 static const char *browsercmd[]  = { "kffx", NULL };
-static const char *monitorcmd[]  = { "kmon", NULL };
+static const char *dmonitorcmd[]  = { "kdmo", NULL };
+static const char *smonitorcmd[]  = { "ksmo", NULL };
 static const char *shutdowncmd[]  = { "shutdown", "now", NULL };
 static const char *restartcmd[]  = { "shutdown", "-r", "now", NULL };
 
@@ -148,7 +149,8 @@ static Key keys[] = {
 	{ MODKEY,                       XK_6,            view,           {.ui = ~0 } },
 	{ MODKEY|ShiftMask,             XK_6,            tag,            {.ui = ~0 } },
 	{ ALTMOD,                       XK_m,            focusmon,       {.i = +1 } },
-	{ ALTMOD|ShiftMask,             XK_m,            spawn,          {.v = monitorcmd } },
+	{ ALTMOD|ShiftMask,             XK_m,            spawn,          {.v = dmonitorcmd } },
+	{ ALTMOD|ShiftMask|ControlMask, XK_m,            spawn,          {.v = smonitorcmd } },
 	{ MODKEY|ShiftMask,             XK_bracketright, quit,           {0} },
 	{ MODKEY|ShiftMask|ControlMask, XK_bracketleft,  spawn,          {.v = shutdowncmd } },
 	{ MODKEY|ShiftMask|ControlMask, XK_bracketright, spawn,          {.v = restartcmd } },

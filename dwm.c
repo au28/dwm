@@ -245,7 +245,7 @@ static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
 static void sigchld(int unused);
 static void spawn(const Arg *arg);
-static void switchtag(Monitor *m, unsigned int newtagset, Bool view);
+static void switchtag(Monitor *m, unsigned int newtagset);
 static void tag(const Arg *arg);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
@@ -480,35 +480,15 @@ attach(Client *c)
 void
 attachclients(Monitor *m) {
 	/* attach clients to the specified monitor */
-	Monitor *tm;
 	Client *c;
-	unsigned int utags = 0;
-	Bool rmons = False;
 	if(!m)
 		return;
 
-	/* collect information about the tags in use */
-	for (tm = mons; tm; tm = tm->next)
-		if(tm != m)
-			utags |= tm->tagset[tm->seltags];
-
 	for (c = m->cl->clients; c; c = c->next)
 		if(ISVISIBLE(c, m)) {
-			/* if client is also visible on other tags that are displayed on
-			 * other monitors, remove these tags */
-			if(c->tags & utags) {
-				c->tags = c->tags & m->tagset[m->seltags];
-				rmons = True;
-			}
 			unfocus(c, True);
 			c->mon = m;
 		}
-
-	if (rmons)
-		for (tm = mons; tm; tm = tm->next)
-			if(tm != m)
-				arrange(tm);
-
 }
 
 void
@@ -809,7 +789,6 @@ Monitor *
 createmon(void)
 {
 	Monitor *m, *tm;
-	Client *c;
 	int i;
 
 	/* bail out if the number of monitors exceeds the number of tags */
@@ -821,8 +800,7 @@ createmon(void)
 	/* find the first tag that isn't in use */
 	for (i=0; i < LENGTH(tags); i++) {
 		for (tm=mons; tm && !(tm->tagset[tm->seltags] & (1<<i)); tm=tm->next);
-		for (c = cl->clients; c && !ISVISIBLEONTAG(c, 1<<i) ; c = c->next);
-		if (!tm && !c)
+		if (!tm)
 			break;
 	}
 	/* reassign all tags to monitors since there's currently no free tag for the
@@ -2085,7 +2063,7 @@ spawn(const Arg *arg)
 }
 
 void
-switchtag(Monitor *m, unsigned int newtagset, Bool view)
+switchtag(Monitor *m, unsigned int newtagset)
 {
     Monitor *tm;
     Client *c;
@@ -2095,7 +2073,7 @@ switchtag(Monitor *m, unsigned int newtagset, Bool view)
         if (newtagset & (1<<i))
             continue;
         for (c = cl->clients; c && !ISVISIBLEONTAG(c, 1<<i) ; c = c->next);
-        if (!c && (selmon->tagset[selmon->seltags] & (1<<i)) && view)
+        if (!c && (selmon->tagset[selmon->seltags] & (1<<i)))
             break;
         for (tm=mons; tm && !((tm->tagset[tm->seltags] & (1<<i)) && tm!=m); tm=tm->next);
         if (!c && !tm)
@@ -2131,7 +2109,6 @@ tag(const Arg *arg)
 				/* prevent moving client to all tags when multiple monitors are connected */
 				if(newtags & selmon->tagset[selmon->seltags])
 					return;
-                switchtag(m, newtags, False);
 				selmon->sel->tags = newtags;
 				selmon->sel->mon = m;
 				arrange(m);
@@ -2139,7 +2116,7 @@ tag(const Arg *arg)
 			}
 		/* workaround in case just one monitor is connected */
 
-		selmon->sel->tags = arg->ui & (~SPTAGMASK);
+		selmon->sel->tags = newtags;
 		focus(NULL);
 		arrange(selmon);
 	}
@@ -2561,10 +2538,10 @@ view(const Arg *arg)
     if (arg->ui & (~SPTAGMASK))
         newtagset = arg->ui & (~SPTAGMASK);
     for (m = mons; m; m = m->next)
-        if (m != selmon) {
+        if (m != selmon && newtagset & m->tagset[m->seltags]) {
             if (!(newtagset ^ (~SPTAGMASK)))
                 return;
-            switchtag(m, newtagset, True);
+            switchtag(m, newtagset);
             attachclients(m);
             arrange(m);
         }
